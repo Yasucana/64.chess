@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI-Powered Chess with Emoji Pieces</title>
+    <style>
+        body { display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background-color: #f0f0f0; font-family: Arial, sans-serif; }
+        #game-container { text-align: center; }
+        #chessboard { display: grid; grid-template-columns: repeat(8, 60px); grid-template-rows: repeat(8, 60px); width: 480px; height: 480px; border: 2px solid #333; margin: 0 auto; }
+        .square { width: 60px; height: 60px; display: flex; justify-content: center; align-items: center; font-size: 30px; cursor: pointer; }
+        .white { background-color: #fff; }
+        .black { background-color: #769656; }
+        .selected { background-color: #ffff99 !important; }
+        .valid-move { background-color: #99ff99 !important; }
+        #status { margin-top: 20px; font-size: 18px; }
+        #restart { margin-top: 10px; padding: 10px 20px; font-size: 16px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <div id="chessboard"></div>
+        <div id="status">白のターン</div>
+        <button id="restart">ゲームをリスタート</button>
+    </div>
+    <script>
+        const pieceEmojis = {
+            'P': '♙', 'N': '♘', 'B': '♗', 'R': '♖', 'Q': '♕', 'K': '♔',
+            'p': '♟', 'n': '♞', 'b': '♝', 'r': '♜', 'q': '♛', 'k': '♚'
+        };
+        const board = [
+            ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r'],
+            ['p', 'p', 'p', 'p', 'p', 'p', 'p', 'p'],
+            ['', '', '', '', '', '', '', ''],
+            ['', '', '', '', '', '', '', ''],
+            ['', '', '', '', '', '', '', ''],
+            ['', '', '', '', '', '', '', ''],
+            ['P', 'P', 'P', 'P', 'P', 'P', 'P', 'P'],
+            ['R', 'N', 'B', 'Q', 'K', 'B', 'N', 'R']
+        ];
+        let selectedPiece = null;
+        let currentPlayer = 'white';
+        let gameOver = false;
+
+        const pieceValues = { 'P': 1, 'N': 3, 'B': 3, 'R': 5, 'Q': 9, 'K': 100, 'p': -1, 'n': -3, 'b': -3, 'r': -5, 'q': -9, 'k': -100 };
+        const boardElement = document.getElementById('chessboard');
+        const statusElement = document.getElementById('status');
+        const restartButton = document.getElementById('restart');
+
+        function initializeBoard() {
+            boardElement.innerHTML = '';
+            for (let i = 0; i < 8; i++) {
+                for (let j = 0; j < 8; j++) {
+                    const square = document.createElement('div');
+                    square.classList.add('square', (i + j) % 2 === 0 ? 'white' : 'black');
+                    square.dataset.row = i;
+                    square.dataset.col = j;
+                    if (board[i][j]) square.textContent = pieceEmojis[board[i][j]];
+                    square.addEventListener('click', handleSquareClick);
+                    boardElement.appendChild(square);
+                }
+            }
+        }
+
+        function handleSquareClick(event) {
+            if (gameOver) return;
+            const row = parseInt(event.target.dataset.row);
+            const col = parseInt(event.target.dataset.col);
+            if (selectedPiece) {
+                if (isValidMove(selectedPiece.row, selectedPiece.col, row, col)) {
+                    movePiece(selectedPiece.row, selectedPiece.col, row, col);
+                    clearHighlights();
+                    selectedPiece = null;
+                    if (currentPlayer === 'white') {
+                        currentPlayer = 'black';
+                        statusElement.textContent = "黒のターン (AI)";
+                        setTimeout(aiMove, 500);
+                    }
+                } else {
+                    clearHighlights();
+                    selectedPiece = null;
+                }
+            }
+            if (board[row][col] && isPlayerPiece(row, col)) {
+                selectedPiece = { row, col };
+                highlightValidMoves(row, col);
+                event.target.classList.add('selected');
+            }
+        }
+
+        function isPlayerPiece(row, col) {
+            const piece = board[row][col];
+            return (currentPlayer === 'white' && piece && piece === piece.toUpperCase()) ||
+                   (currentPlayer === 'black' && piece && piece === piece.toLowerCase());
+        }
+
+        function isValidMove(fromRow, fromCol, toRow, toCol) {
+            const piece = board[fromRow][fromCol];
+            if (!piece) return false;
+            const isWhite = piece === piece.toUpperCase();
+            if ((isWhite && currentPlayer !== 'white') || (!isWhite && currentPlayer !== 'black')) return false;
+            const moves = getPossibleMoves(fromRow, fromCol);
+            return moves.some(move => move.row === toRow && move.col === toCol);
+        }
+
+        function getPossibleMoves(row, col) {
+            const piece = board[row][col].toLowerCase();
+            const isWhite = board[row][col] === board[row][col].toUpperCase();
+            let moves = [];
+            if (piece === 'p') {
+                const direction = isWhite ? -1 : 1;
+                const startRow = isWhite ? 6 : 1;
+                if (!board[row + direction][col]) {
+                    moves.push({ row: row + direction, col });
+                    if (row === startRow && !board[row + 2 * direction][col]) {
+                        moves.push({ row: row + 2 * direction, col });
+                    }
+                }
+                if (col > 0 && board[row + direction][col - 1] && (isWhite !== (board[row + direction][col - 1] === board[row + direction][col - 1].toUpperCase()))) {
+                    moves.push({ row: row + direction, col: col - 1 });
+                }
+                if (col < 7 && board[row + direction][col + 1] && (isWhite !== (board[row + direction][col + 1] === board[row + direction][col + 1].toUpperCase()))) {
+                    moves.push({ row: row + direction, col: col + 1 });
+                }
+            } else if (piece === 'n') {
+                const knightMoves = [
+                    [-2, -1], [-2, 1], [-1, -2], [-1, 2], [1, -2], [1, 2], [2, -1], [2, 1]
+                ];
+                for (const [dr, dc] of knightMoves) {
+                    const newRow = row + dr, newCol = col + dc;
+                    if (newRow >= 0 && newRow < 8 && newCol >= 0 && newCol < 8) {
+                        if (!board[newRow][newCol] || (isWhite !== (board[newRow][newCol] === board[newRow][newCol].toUpperCase()))) {
+                            moves.push({ row: newRow, col: newCol });
+                        }
+                    }
+                }
+            } else if (piece === 'b') {
+                for (const [dr, dc] of [[-1, -1], [-1, 1], [1, -1], [1, 1]]) {
+                    let newRow = row + dr, newCol = col + dc;
+                    while (newRow >= 0 && newRow < 8 && newCol >= 0 && newCol < 8) {
+                        if (!board[newRow][newCol]) {
+                            moves.push({ row: newRow, col: newCol });
+                        } else {
+                            if (isWhite !== (board[newRow][newCol] === board[newRow][newCol].toUpperCase())) {
+                                moves.push({ row: newRow, col: newCol });
+                            }
+                            break;
+                        }
+                        newRow += dr;
+                        newCol += dc;
+                    }
+                }
+            } else if (piece === 'r') {
+                for (const [dr, dc] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
+                    let newRow = row + dr, newCol = col + dc;
+                    while (newRow >= 0 && newRow < 8 && newCol >= 0 && newCol < 8) {
+                        if (!board[newRow][newCol]) {
+                            moves.push({ row: newRow, col: newCol });
+                        } else {
+                            if (isWhite !== (board[newRow][newCol] === board[newRow][newCol].toUpperCase())) {
+                                moves.push({ row: newRow, col: newCol });
+                            }
+                            break;
+                        }
+                        newRow += dr;
+                        newCol += dc;
+                    }
+                }
+            } else if (piece === 'q') {
+                for (const [dr, dc] of [[-1, -1], [-1, 1], [1, -1], [1, 1], [-1, 0], [1, 0], [0, -1], [0, 1]]) {
+                    let newRow = row + dr, newCol = col + dc;
+                    while (newRow >= 0 && newRow < 8 && newCol >= 0 && newCol < 8) {
+                        if (!board[newRow][newCol]) {
+                            moves.push({ row: newRow, col: newCol });
+                        } else {
+                            if (isWhite !== (board[newRow][newCol] === board[newRow][newCol].toUpperCase())) {
+                                moves.push({ row: newRow, col: newCol });
+                            }
+                            break;
+                        }
+                        newRow += dr;
+                        newCol += dc;
+                    }
+                }
+            } else if (piece === 'k') {
+                const kingMoves = [
+                    [-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]
+                ];
+                for (const [dr, dc] of kingMoves) {
+                    const newRow = row + dr, newCol = col + dc;
+                    if (newRow >= 0 && newRow < 8 && newCol >= 0 && newCol < 8) {
+                        if (!board[newRow][newCol] || (isWhite !== (board[newRow][newCol] === board[newRow][newCol].toUpperCase()))) {
+                            moves.push({ row: newRow, col: newCol });
+                        }
+                    }
+                }
+            }
+            return moves.filter(move => move.row >= 0 && move.row < 8 && move.col >= 0 && move.col < 8);
+        }
+
+        function movePiece(fromRow, fromCol, toRow, toCol) {
+            board[toRow][toCol] = board[fromRow][fromCol];
+            board[fromRow][fromCol] = '';
+            initializeBoard();
+            if (isCheckmate(currentPlayer === 'white' ? 'black' : 'white')) {
+                statusElement.textContent = `${currentPlayer === 'white' ? '白' : '黒'}がチェックメイトで勝利！`;
+                gameOver = true;
+            } else if (isCheck(currentPlayer === 'white' ? 'black' : 'white')) {
+                statusElement.textContent = `${currentPlayer === 'white' ? '黒' : '白'}がチェックされています！`;
+            } else {
+                statusElement.textContent = `${currentPlayer === 'white' ? '黒' : '白'}のターン`;
+            }
+        }
+
+        function highlightValidMoves(row, col) {
+            clearHighlights();
+            const moves = getPossibleMoves(row, col);
+            moves.forEach(move => {
+                const square = document.querySelector(`.square[data-row="${move.row}"][data-col="${move.col}"]`);
+                square.classList.add('valid-move');
+            });
+        }
+
+        function clearHighlights() {
+            document.querySelectorAll('.square').forEach(square => {
+                square.classList.remove('selected', 'valid-move');
+            });
+        }
+
+        function aiMove() {
+            if (gameOver) return;
+            const bestMove = findBestMove(3);
+            if (bestMove) {
+                movePiece(bestMove.fromRow, bestMove.fromCol, bestMove.toRow, bestMove.toCol);
+                currentPlayer = 'white';
+                statusElement.textContent = "白のターン";
+            }
+        }
+
+        function findBestMove(depth) {
+            let bestScore = -Infinity;
+            let bestMove = null;
+            const moves = getAllPossibleMoves('black');
+            for (const move of moves) {
+                const { fromRow, fromCol, toRow, toCol } = move;
+                const capturedPiece = board[toRow][toCol];
+                board[toRow][toCol] = board[fromRow][fromCol];
+                board[fromRow][fromCol] = '';
+                const score = minimax(depth - 1, -Infinity, Infinity, false);
+                board[fromRow][fromCol] = board[toRow][toCol];
+                board[toRow][toCol] = capturedPiece;
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestMove = move;
+                }
+            }
+            return bestMove;
+        }
+
+        function minimax(depth, alpha, beta, isMaximizing) {
+            if (depth === 0 || isCheckmate(isMaximizing ? 'white' : 'black')) {
+                return evaluateBoard();
+            }
+            const moves = getAllPossibleMoves(isMaximizing ? 'white' : 'black');
+            if (isMaximizing) {
+                let maxEval = -Infinity;
+                for (const move of moves) {
+                    const { fromRow, fromCol, toRow, toCol } = move;
+                    const capturedPiece = board[toRow][toCol];
+                    board[toRow][toCol] = board[fromRow][fromCol];
+                    board[fromRow][fromCol] = '';
+                    const evalScore = minimax(depth - 1, alpha, beta, false);
+                    board[fromRow][fromCol] = board[toRow][toCol];
+                    board[toRow][toCol] = capturedPiece;
+                    maxEval = Math.max(maxEval, evalScore);
+                    alpha = Math.max(alpha, evalScore);
+                    if (beta <= alpha) break;
+                }
+                return maxEval;
+            } else {
+                let minEval = Infinity;
+                for (const move of moves) {
+                    const { fromRow, fromCol, toRow, toCol } = move;
+                    const capturedPiece = board[toRow][toCol];
+                    board[toRow][toCol] = board[fromRow][fromCol];
+                    board[fromRow][fromCol] = '';
+                    const evalScore = minimax(depth - 1, alpha, beta, true);
+                    board[fromRow][fromCol] = board[toRow][toCol];
+                    board[toRow][toCol] = capturedPiece;
+                    minEval = Math.min(minEval, evalScore);
+                    beta = Math.min(beta, evalScore);
+                    if (beta <= alpha) break;
+                }
+                return minEval;
+            }
+        }
+
+        function evaluateBoard() {
+            let score = 0;
+            for (let i = 0; i < 8; i++) {
+                for (let j = 0; j < 8; j++) {
+                    if (board[i][j]) {
+                        score += pieceValues[board[i][j]];
+                    }
+                }
+            }
+            return score;
+        }
+
+        function getAllPossibleMoves(player) {
+            const moves = [];
+            for (let i = 0; i < 8; i++) {
+                for (let j = 0; j < 8; j++) {
+                    if (board[i][j] && (player === 'white' ? board[i][j] === board[i][j].toUpperCase() : board[i][j] === board[i][j].toLowerCase())) {
+                        const possibleMoves = getPossibleMoves(i, j);
+                        possibleMoves.forEach(move => {
+                            moves.push({ fromRow: i, fromCol: j, toRow: move.row, toCol: move.col });
+                        });
+                    }
+                }
+            }
+            return moves;
+        }
+
+        function isCheck(player) {
+            const king = player === 'white' ? 'K' : 'k';
+            let kingPos = null;
+            for (let i = 0; i < 8; i++) {
+                for (let j = 0; j < 8; j++) {
+                    if (board[i][j] === king) {
+                        kingPos = { row: i, col: j };
+                        break;
+                    }
+                }
+                if (kingPos) break;
+            }
+            const opponentMoves = getAllPossibleMoves(player === 'white' ? 'black' : 'white');
+            return opponentMoves.some(move => move.toRow === kingPos.row && move.toCol === kingPos.col);
+        }
+
+        function isCheckmate(player) {
+            if (!isCheck(player)) return false;
+            const moves = getAllPossibleMoves(player);
+            for (const move of moves) {
+                const { fromRow, fromCol, toRow, toCol } = move;
+                const capturedPiece = board[toRow][toCol];
+                board[toRow][toCol] = board[fromRow][fromCol];
+                board[fromRow][fromCol] = '';
+                const stillInCheck = isCheck(player);
+                board[fromRow][fromCol] = board[toRow][toCol];
+                board[toRow][toCol] = capturedPiece;
+                if (!stillInCheck) return false;
+            }
+            return true;
+        }
+
+        restartButton.addEventListener('click', () => {
+            board.forEach((row, i) => {
+                row[0] = i < 2 ? ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r'][i] : i > 5 ? ['R', 'N', 'B', 'Q', 'K', 'B', 'N', 'R'][i - 6] : '';
+                row[1] = i === 1 ? 'p' : i === 6 ? 'P' : '';
+                row[2] = i === 1 ? 'p' : i === 6 ? 'P' : '';
+                row[3] = i === 1 ? 'p' : i === 6 ? 'P' : '';
+                row[4] = i === 1 ? 'p' : i === 6 ? 'P' : '';
+                row[5] = i === 1 ? 'p' : i === 6 ? 'P' : '';
+                row[6] = i === 1 ? 'p' : i === 6 ? 'P' : '';
+                row[7] = i === 1 ? 'p' : i === 6 ? 'P' : '';
+            });
+            currentPlayer = 'white';
+            gameOver = false;
+            statusElement.textContent = "白のターン";
+            initializeBoard();
+        });
+
+        initializeBoard();
+    </script>
+</body>
+</html>
